@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ma Sói Một Đêm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="moon-glow" id="moonGlow"></div>
+<canvas id="starCanvas"></canvas>
+
+<!-- ============ LOGIN / HOME SCREEN ============ -->
+<section id="screen-login" class="screen active">
+  <div class="login-card">
+    <h1 class="game-title">MA SÓI <span>MỘT ĐÊM</span></h1>
+    <p class="game-subtitle">Một làng nhỏ. Một đêm dài. Ai đó không phải người.</p>
+
+    <div class="field">
+      <label for="inputName">Tên của bạn</label>
+      <input id="inputName" type="text" maxlength="16" placeholder="Nhập tên hiển thị...">
+    </div>
+
+    <div class="login-actions">
+      <button class="btn btn-primary" id="btnShowCreate">Tạo Phòng</button>
+      <button class="btn btn-ghost" id="btnShowJoin">Tham Gia Phòng</button>
+    </div>
+
+    <!-- Create room panel -->
+    <div class="panel hidden" id="panelCreate">
+      <div class="toggle-row">
+        <span>Phòng công khai</span>
+        <label class="switch">
+          <input type="checkbox" id="chkPublic" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <button class="btn btn-primary" id="btnCreateConfirm">Khởi Tạo</button>
+    </div>
+
+    <!-- Join by code panel -->
+    <div class="panel hidden" id="panelJoin">
+      <div class="field">
+        <label for="inputRoomCode">Mã phòng</label>
+        <input id="inputRoomCode" type="text" maxlength="6" placeholder="VD: A3F9K2" style="text-transform:uppercase">
+      </div>
+      <button class="btn btn-primary" id="btnJoinConfirm">Vào Phòng</button>
+    </div>
+
+    <div class="public-rooms">
+      <h3>Danh sách phòng chờ</h3>
+      <div id="publicRoomList" class="room-list">
+        <p class="empty-note">Chưa có phòng công khai nào...</p>
+      </div>
+    </div>
+
+    <p class="error-text" id="loginError"></p>
+  </div>
+</section>
+
+<!-- ============ LOBBY SCREEN ============ -->
+<section id="screen-lobby" class="screen">
+  <div class="lobby-layout">
+
+    <div class="lobby-card">
+      <div class="lobby-header">
+        <h2>Phòng chờ</h2>
+        <div class="room-code-badge">Mã phòng: <span id="lobbyRoomCode">------</span></div>
+      </div>
+      <p class="hint">Cần từ 3 đến 10 người chơi để bắt đầu.</p>
+      <div id="lobbyPlayerList" class="player-chip-list"></div>
+      <button class="btn btn-primary" id="btnStartGame">Bắt Đầu Ván Chơi</button>
+      <p class="hint" id="lobbyWaitNote">Đang chờ chủ phòng bắt đầu...</p>
+      <button class="btn btn-ghost" id="btnLeaveLobby">🏠 Về Trang Chủ</button>
+    </div>
+
+    <div class="lobby-side">
+      <div class="role-select-card">
+        <div class="role-select-header">
+          <h3>🃏 Bộ Bài Của Ván Này</h3>
+          <span class="role-total" id="roleTotalBadge">0 / 0 lá</span>
+        </div>
+        <p class="hint" id="roleSelectHint">Chủ phòng có thể tùy chỉnh bộ bài bên dưới.</p>
+        <div id="roleSelectList" class="role-select-list"></div>
+        <button class="btn btn-ghost hidden" id="btnResetRoleSelection">Đặt Lại Mặc Định</button>
+      </div>
+
+      <div class="chat-panel">
+        <div class="chat-messages" id="chatMessagesLobby"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInputLobby" placeholder="Nhắn gì đó...">
+          <button id="btnSendChatLobby">Gửi</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ GAME SCREEN ============ -->
+<section id="screen-game" class="screen">
+
+  <div class="phase-banner" id="phaseBanner">Đêm đã xuống...</div>
+
+  <div class="game-layout">
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="round-table" id="roundTable">
+        <div class="middle-cards" id="middleCards">
+          <div class="mid-card" data-idx="0"><div class="card-back"></div></div>
+          <div class="mid-card" data-idx="1"><div class="card-back"></div></div>
+          <div class="mid-card" data-idx="2"><div class="card-back"></div></div>
+        </div>
+        <div class="my-role-display" id="myRoleDisplay">
+          <div class="role-card-face" id="myRoleCard">?</div>
+          <div class="role-card-name" id="myRoleName">Chưa rõ vai trò</div>
+        </div>
+      </div>
+      <div class="player-ring" id="playerRing"></div>
+    </div>
+
+    <!-- Side panel: status + actions + vote -->
+    <div class="side-panel">
+      <div class="status-box" id="statusBox">Đang chuẩn bị ván chơi...</div>
+
+      <div class="timer-wrap hidden" id="timerWrap">
+        <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+        <span id="timerSeconds">15</span>s
+      </div>
+
+      <button class="btn btn-primary hidden" id="btnStartVoting">Bỏ Phiếu</button>
+
+      <button class="btn btn-ghost" id="btnOpenGrimoire">📖 Sách Ghi Chú</button>
+      <button class="btn btn-ghost" id="btnLeaveGame">🏠 Về Trang Chủ</button>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-panel">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Nhắn gì đó...">
+        <button id="btnSendChat">Gửi</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NIGHT ACTION MODAL ============ -->
+<div class="modal-overlay hidden" id="modalNightAction">
+  <div class="modal-box mystic-box">
+    <h3 id="naRoleName">Hành động</h3>
+    <p id="naDescription" class="hint"></p>
+    <div id="naBody"></div>
+    <button class="btn btn-primary hidden" id="btnNaConfirm">Xác Nhận</button>
+  </div>
+</div>
+
+<!-- ============ VOTING MODAL ============ -->
+<div class="modal-overlay hidden" id="modalVoting">
+  <div class="modal-box mystic-box">
+    <h3>Ai là Sói?</h3>
+    <p class="hint">Chọn một người chơi để treo cổ.</p>
+    <div id="voteTargets" class="vote-target-list"></div>
+    <p class="hint" id="voteProgress"></p>
+  </div>
+</div>
+
+<!-- ============ RESULT MODAL ============ -->
+<div class="modal-overlay hidden" id="modalResult">
+  <div class="modal-box mystic-box result-box">
+    <h2 id="resultTitle">Kết Quả</h2>
+    <p id="resultSummary"></p>
+    <div id="resultReveals" class="reveal-list"></div>
+    <p class="hint" id="resultMiddle"></p>
+    <button class="btn btn-primary" id="btnBackToLobby">Chơi Lại (Về Sảnh Chờ)</button>
+    <button class="btn btn-ghost" id="btnResultHome">🏠 Về Trang Chủ</button>
+  </div>
+</div>
+
+<!-- ============ GRIMOIRE MODAL ============ -->
+<div class="modal-overlay hidden" id="modalGrimoire">
+  <div class="modal-box mystic-box grimoire-box">
+    <div class="grimoire-header">
+      <h3>📖 Sách Ghi Chú (Grimoire)</h3>
+      <button class="btn-close" id="btnCloseGrimoire">✕</button>
+    </div>
+    <div class="grimoire-section">
+      <h4>Các lá bài trong ván này</h4>
+      <div id="grimoireInPlay" class="grimoire-cards"></div>
+    </div>
+    <div class="grimoire-section">
+      <h4>Toàn bộ vai trò trong bộ Ma Sói Một Đêm</h4>
+      <div id="grimoireAll" class="grimoire-cards"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
