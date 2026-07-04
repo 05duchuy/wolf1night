@@ -96,9 +96,18 @@ namespace WolfGameServer.Services
                 Name = playerName.Trim(),
                 IsHost = false
             };
-            room.Players[connectionId] = player;
-            ConnectionRoomMap[connectionId] = room.RoomCode;
-            if (!room.RoleCountsCustomized) room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+
+            await room.Lock.WaitAsync();
+            try
+            {
+                room.Players[connectionId] = player;
+                ConnectionRoomMap[connectionId] = room.RoomCode;
+                if (!room.RoleCountsCustomized) room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+            }
+            finally
+            {
+                room.Lock.Release();
+            }
 
             await _hub.Groups.AddToGroupAsync(connectionId, room.RoomCode);
             await BroadcastPlayerListAsync(room);
@@ -122,17 +131,25 @@ namespace WolfGameServer.Services
             if (room.HostConnectionId != connectionId) return "Chỉ chủ phòng mới có thể tùy chỉnh bộ bài.";
             if (room.Phase != GamePhase.Lobby) return "Không thể tùy chỉnh bộ bài khi ván chơi đã bắt đầu.";
 
-            var newCounts = RoleInfo.DefaultCounts(room.Players.Count).ToDictionary(kv => kv.Key, _ => 0);
-            foreach (var kv in rawCounts)
+            await room.Lock.WaitAsync();
+            try
             {
-                if (Enum.TryParse<RoleType>(kv.Key, out var role))
+                var newCounts = RoleInfo.DefaultCounts(room.Players.Count).ToDictionary(kv => kv.Key, _ => 0);
+                foreach (var kv in rawCounts)
                 {
-                    newCounts[role] = Math.Clamp(kv.Value, 0, 10);
+                    if (Enum.TryParse<RoleType>(kv.Key, out var role))
+                    {
+                        newCounts[role] = Math.Clamp(kv.Value, 0, 10);
+                    }
                 }
+                room.RoleCounts = newCounts;
+                room.RoleCountsCustomized = true;
+            }
+            finally
+            {
+                room.Lock.Release();
             }
 
-            room.RoleCounts = newCounts;
-            room.RoleCountsCustomized = true;
             await BroadcastRoleSelectionAsync(room);
             return null;
         }
@@ -143,8 +160,17 @@ namespace WolfGameServer.Services
             if (room.HostConnectionId != connectionId) return "Chỉ chủ phòng mới có thể tùy chỉnh bộ bài.";
             if (room.Phase != GamePhase.Lobby) return "Không thể tùy chỉnh bộ bài khi ván chơi đã bắt đầu.";
 
-            room.RoleCountsCustomized = false;
-            room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+            await room.Lock.WaitAsync();
+            try
+            {
+                room.RoleCountsCustomized = false;
+                room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+            }
+            finally
+            {
+                room.Lock.Release();
+            }
+
             await BroadcastRoleSelectionAsync(room);
             return null;
         }
@@ -166,29 +192,43 @@ namespace WolfGameServer.Services
             ConnectionRoomMap.TryRemove(connectionId, out _);
             if (!Rooms.TryGetValue(roomCode, out var room)) return;
 
-            room.Players.TryRemove(connectionId, out var leftPlayer);
+            Player? leftPlayer;
+            bool becameEmpty;
+            await room.Lock.WaitAsync();
+            try
+            {
+                room.Players.TryRemove(connectionId, out leftPlayer);
+
+                // Resolve any pending night action from the player who left so the loop isn't stuck.
+                if (room.PendingActions.TryRemove(connectionId, out var tcs))
+                    tcs.TrySetResult(true);
+
+                becameEmpty = room.Players.IsEmpty;
+                if (!becameEmpty)
+                {
+                    // Reassign host if needed.
+                    if (room.HostConnectionId == connectionId)
+                    {
+                        var newHost = room.Players.Values.First();
+                        newHost.IsHost = true;
+                        room.HostConnectionId = newHost.ConnectionId;
+                    }
+                    if (!room.RoleCountsCustomized) room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+                }
+            }
+            finally
+            {
+                room.Lock.Release();
+            }
+
             await _hub.Groups.RemoveFromGroupAsync(connectionId, roomCode);
 
-            // Resolve any pending night action from the player who left so the loop isn't stuck.
-            if (room.PendingActions.TryRemove(connectionId, out var tcs))
-                tcs.TrySetResult(true);
-
-            if (room.Players.IsEmpty)
+            if (becameEmpty)
             {
                 Rooms.TryRemove(roomCode, out _);
                 if (room.IsPublic) await BroadcastPublicRoomListAsync();
                 return;
             }
-
-            // Reassign host if needed.
-            if (room.HostConnectionId == connectionId)
-            {
-                var newHost = room.Players.Values.First();
-                newHost.IsHost = true;
-                room.HostConnectionId = newHost.ConnectionId;
-            }
-
-            if (!room.RoleCountsCustomized) room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
 
             await BroadcastPlayerListAsync(room);
             await BroadcastRoleSelectionAsync(room);
@@ -256,10 +296,28 @@ namespace WolfGameServer.Services
             if (room.Players.Count < 3 || room.Players.Count > 10)
                 return "Số lượng người chơi phải từ 3 đến 10.";
 
-            int required = room.Players.Count + 3;
-            int total = room.RoleCounts.Values.Sum();
+            int required;
+            int total;
+            await room.Lock.WaitAsync();
+            try
+            {
+                // Belt-and-suspenders: if the host never customized the deck, make
+                // absolutely sure it matches the current player count right now,
+                // regardless of any earlier join/leave timing.
+                if (!room.RoleCountsCustomized) room.RoleCounts = RoleInfo.DefaultCounts(room.Players.Count);
+                required = room.Players.Count + 3;
+                total = room.RoleCounts.Values.Sum();
+            }
+            finally
+            {
+                room.Lock.Release();
+            }
+
             if (total != required)
+            {
+                await BroadcastRoleSelectionAsync(room);
                 return $"Tổng số lá bài đang là {total}, nhưng cần đúng {required} lá (số người chơi + 3 lá giữa bàn). Hãy chỉnh lại bộ bài.";
+            }
             if (room.RoleCounts.TryGetValue(RoleType.Werewolf, out var wolfCount) && wolfCount < 1)
                 return "Ván chơi cần ít nhất 1 lá Sói.";
 
@@ -326,17 +384,13 @@ namespace WolfGameServer.Services
                     await RunNightStepAsync(room, role);
                 }
 
-                // 3. Night over — reveal final (current) role to each player.
-                foreach (var p in room.Players.Values)
-                {
-                    await _hub.Clients.Client(p.ConnectionId).SendAsync("ReceiveRole", new
-                    {
-                        role = p.CurrentRole.ToString(),
-                        roleName = RoleInfo.DisplayName(p.CurrentRole),
-                        isFinal = true
-                    });
-                }
-
+                // 3. Night is over. We deliberately do NOT tell everyone their final
+                // role here — that would spoil the whole point of the Robber,
+                // Troublemaker and Drunk cards. A player only ever learns their
+                // current role if their own card's action explicitly reveals it
+                // (Robber sees their new card after swapping; Insomniac checks
+                // their card at the end of the night). Everyone else only knows
+                // the original card they were shown at the very start.
                 room.Phase = GamePhase.Day;
                 await _hub.Clients.Group(room.RoomCode).SendAsync("DayStarted", new
                 {
@@ -497,6 +551,7 @@ namespace WolfGameServer.Services
                         (player.CurrentRole, target.CurrentRole) = (target.CurrentRole, player.CurrentRole);
                         string msg = $"Bạn đã đổi bài với {target.Name}. Lá bài mới của bạn là: {RoleInfo.DisplayName(player.CurrentRole)}";
                         await SendActionResult(player.ConnectionId, msg);
+                        await SendRoleUpdate(player);
                     }
                     else
                     {
@@ -540,9 +595,23 @@ namespace WolfGameServer.Services
                 {
                     string msg = $"Lá bài hiện tại của bạn là: {RoleInfo.DisplayName(player.CurrentRole)}";
                     await SendActionResult(player.ConnectionId, msg);
+                    await SendRoleUpdate(player);
                     break;
                 }
             }
+        }
+
+        /// <summary>Pushes a player's own current role to their client — only ever
+        /// used for roles whose action explicitly entitles them to know it
+        /// (Robber right after swapping, Insomniac at the end of the night).</summary>
+        private async Task SendRoleUpdate(Player player)
+        {
+            await _hub.Clients.Client(player.ConnectionId).SendAsync("ReceiveRole", new
+            {
+                role = player.CurrentRole.ToString(),
+                roleName = RoleInfo.DisplayName(player.CurrentRole),
+                isFinal = true
+            });
         }
 
         private async Task SendActionResult(string connectionId, string message)
