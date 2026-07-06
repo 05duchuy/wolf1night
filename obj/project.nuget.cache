@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "UE5UgdYWMYY=",
+  "dgSpecHash": "TWezrhta0Yo=",
   "success": true,
-  "projectFilePath": "E:\\ma soi 1 dem\\Server\\WolfGameServer.csproj",
+  "projectFilePath": "E:\\project\\wolf1night\\WolfGameServer.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\DELL\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.27\\microsoft.netcore.app.ref.8.0.27.nupkg.sha512",
     "C:\\Users\\DELL\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.27\\microsoft.windowsdesktop.app.ref.8.0.27.nupkg.sha512",

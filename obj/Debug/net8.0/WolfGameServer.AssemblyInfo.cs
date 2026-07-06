@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WolfGameServer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8dab20d0cbec147592c30b132b8e2641e0bb929e")]
 [assembly: System.Reflection.AssemblyProductAttribute("WolfGameServer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WolfGameServer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

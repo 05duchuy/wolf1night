@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\ma soi 1 dem\\Server\\WolfGameServer.csproj",
+      "projectUniqueName": "E:\\project\\wolf1night\\WolfGameServer.csproj",
       "projectName": "WolfGameServer",
-      "projectPath": "E:\\ma soi 1 dem\\Server\\WolfGameServer.csproj",
+      "projectPath": "E:\\project\\wolf1night\\WolfGameServer.csproj",
       "packagesPath": "C:\\Users\\DELL\\.nuget\\packages\\",
-      "outputPath": "E:\\ma soi 1 dem\\Server\\obj\\",
+      "outputPath": "E:\\project\\wolf1night\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\DELL\\AppData\\Roaming\\NuGet\\NuGet.Config"
